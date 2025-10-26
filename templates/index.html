@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>News Classifier - Fake News Detection</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            font-family: inherit;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            min-height: 200px;
+            resize: vertical;
+        }
+
+        .btn-container {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 15px 30px;
+            font-size: 18px;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+
+        .btn-predict {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-predict:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-predict:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+
+        .result {
+            margin-top: 30px;
+            padding: 25px;
+            border-radius: 15px;
+            display: none;
+            animation: slideIn 0.5s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .result.fake {
+            background: #ffe6e6;
+            border: 2px solid #ff4444;
+        }
+
+        .result.real {
+            background: #e6ffe6;
+            border: 2px solid #44ff44;
+        }
+
+        .result h2 {
+            margin-bottom: 15px;
+            font-size: 1.8em;
+        }
+
+        .result.fake h2 {
+            color: #cc0000;
+        }
+
+        .result.real h2 {
+            color: #00aa00;
+        }
+
+        .confidence {
+            font-size: 1.2em;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .details {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+        }
+
+        .details h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .detail-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .detail-item:last-child {
+            border-bottom: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            background: #ffe6e6;
+            border: 2px solid #ff4444;
+            color: #cc0000;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            display: none;
+        }
+
+        .char-count {
+            text-align: right;
+            color: #999;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 News Classifier</h1>
+        <p class="subtitle">Fake News Detection mit Machine Learning</p>
+
+        <form id="predictionForm">
+            <div class="form-group">
+                <label for="title">Titel of News:</label>
+                <input type="text" id="title" name="title" placeholder="Paste the text of news article ..." required maxlength="1000">
+                <div class="char-count" id="titleCount">0 / 1000</div>
+            </div>
+
+            <div class="form-group">
+                <label for="text">Text of News:</label>
+                <textarea id="text" name="text" placeholder="Paste the title of news article ..." required maxlength="10000"></textarea>
+                <div class="char-count" id="textCount">0 / 10000</div>
+            </div>
+
+            <div class="btn-container">
+                <button type="submit" class="btn-predict" id="predictBtn">
+                    Analyse
+                </button>
+                <button type="button" class="btn-clear" id="clearBtn">
+                    Clear
+                </button>
+            </div>
+        </form>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p style="margin-top: 15px;">Analysiere Text...</p>
+        </div>
+
+        <div class="error" id="error"></div>
+
+        <div class="result" id="result">
+            <h2 id="resultLabel"></h2>
+            <div class="confidence" id="confidence"></div>
+            
+            <div class="details">
+                <h3>📊 Analyse-Details:</h3>
+                <div class="detail-item">
+                    <span>Fake News likelyhood:</span>
+                    <strong id="probFake">-</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Real News likelyhood:</span>
+                    <strong id="probReal">-</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Text Length:</span>
+                    <strong id="textLength">-</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Uppercase Letter Percentage:</span>
+                    <strong id="uppercase">-</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Amount ! and ?:</span>
+                    <strong id="punctuation">-</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Found URLs:</span>
+                    <strong id="urls">-</strong>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Character counters
+        const titleInput = document.getElementById('title');
+        const textInput = document.getElementById('text');
+        const titleCount = document.getElementById('titleCount');
+        const textCount = document.getElementById('textCount');
+
+        titleInput.addEventListener('input', () => {
+            titleCount.textContent = `${titleInput.value.length} / 1000`;
+        });
+
+        textInput.addEventListener('input', () => {
+            textCount.textContent = `${textInput.value.length} / 10000`;
+        });
+
+        // Form submission
+        document.getElementById('predictionForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const title = titleInput.value.trim();
+            const text = textInput.value.trim();
+
+            if (!title || !text) {
+                showError('Bitte fülle beide Felder aus.');
+                return;
+            }
+
+            // Show loading, hide previous results
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            document.getElementById('predictBtn').disabled = true;
+
+            try {
+                const response = await fetch('/predict', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ title, text })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok || !data.success) {
+                    throw new Error(data.error || 'Prediction fehlgeschlagen');
+                }
+
+                displayResult(data);
+
+            } catch (error) {
+                showError(`Fehler: ${error.message}`);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('predictBtn').disabled = false;
+            }
+        });
+
+        // Clear button
+        document.getElementById('clearBtn').addEventListener('click', () => {
+            document.getElementById('predictionForm').reset();
+            document.getElementById('result').style.display = 'none';
+            document.getElementById('error').style.display = 'none';
+            titleCount.textContent = '0 / 1000';
+            textCount.textContent = '0 / 10000';
+        });
+
+        function displayResult(data) {
+            const resultDiv = document.getElementById('result');
+            const isFake = data.prediction === 0;
+
+            resultDiv.className = 'result ' + (isFake ? 'fake' : 'real');
+            resultDiv.style.display = 'block';
+
+            document.getElementById('resultLabel').textContent = 
+                isFake ? '⚠️ Fake News erkannt!' : '✅ Real News erkannt!';
+            
+            document.getElementById('confidence').textContent = 
+                `Konfidenz: ${(data.confidence * 100).toFixed(1)}%`;
+            
+            document.getElementById('probFake').textContent = 
+                `${(data.probabilities.fake * 100).toFixed(1)}%`;
+            
+            document.getElementById('probReal').textContent = 
+                `${(data.probabilities.real * 100).toFixed(1)}%`;
+            
+            document.getElementById('textLength').textContent = 
+                `${data.features.text_length} Zeichen`;
+            
+            document.getElementById('uppercase').textContent = 
+                `${data.features.uppercase_percentage}%`;
+            
+            document.getElementById('punctuation').textContent = 
+                data.features.punctuation_count;
+            
+            document.getElementById('urls').textContent = 
+                data.features.url_count;
+        }
+
+        function showError(message) {
+            const errorDiv = document.getElementById('error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>
